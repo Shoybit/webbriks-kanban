@@ -30,6 +30,8 @@ const [editingColumnName, setEditingColumnName] = useState("");
 const [showTaskForm, setShowTaskForm] = useState(false);
 const [taskTitle, setTaskTitle] = useState("");
 const [taskColumnId, setTaskColumnId] = useState("");
+const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+const [editingTaskTitle, setEditingTaskTitle] = useState("");
 
 const handleCreateBoard = async () => {
   const token = localStorage.getItem("token");
@@ -233,6 +235,44 @@ const handleDeleteTask = async (taskId: string) => {
   }
 };
 
+const handleUpdateTask = async () => {
+  const token = localStorage.getItem("token");
+
+  if (!token || !editingTaskId || !editingTaskTitle.trim()) return;
+
+  try {
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_API_URL}/tasks/${editingTaskId}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title: editingTaskTitle.trim(),
+        }),
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || "Failed to update task");
+    }
+
+    setTasks((currentTasks) =>
+      currentTasks.map((task) =>
+        task.id === editingTaskId ? data.task : task
+      )
+    );
+
+    setEditingTaskId(null);
+    setEditingTaskTitle("");
+  } catch (error) {
+    console.error("Failed to update task:", error);
+  }
+};
   useEffect(() => {
     const fetchBoards = async () => {
       const token = localStorage.getItem("token");
@@ -644,17 +684,63 @@ useEffect(() => {
         key={task.id}
         className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200/50"
       >
-        <h4 className="font-semibold text-slate-900">
-          {task.title}
-        </h4>
+{editingTaskId === task.id ? (
+  <div className="flex items-center gap-2">
+    <input
+      type="text"
+      value={editingTaskTitle}
+      onChange={(event) => setEditingTaskTitle(event.target.value)}
+      className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-500"
+      autoFocus
+    />
 
-      <button
-        type="button"
-        onClick={() => handleDeleteTask(task.id)}
-        className="mt-3 text-xs font-medium text-red-500 hover:text-red-700"
-      >
-        Delete
-      </button>
+    <button
+      type="button"
+      onClick={handleUpdateTask}
+      className="text-xs font-medium text-slate-900 hover:text-slate-600"
+    >
+      Save
+    </button>
+
+    <button
+      type="button"
+      onClick={() => {
+        setEditingTaskId(null);
+        setEditingTaskTitle("");
+      }}
+      className="text-xs font-medium text-slate-500 hover:text-slate-700"
+    >
+      Cancel
+    </button>
+  </div>
+) : (
+  <h4 className="text-sm font-semibold text-slate-900">
+    {task.title}
+  </h4>
+)}
+
+{editingTaskId !== task.id && (
+  <>
+    <button
+      type="button"
+      onClick={() => {
+        setEditingTaskId(task.id);
+        setEditingTaskTitle(task.title);
+      }}
+      className="mt-3 mr-3 text-xs font-medium text-slate-600 hover:text-slate-900"
+    >
+      Edit
+    </button>
+
+    <button
+      type="button"
+      onClick={() => handleDeleteTask(task.id)}
+      className="mt-3 text-xs font-medium text-red-500 hover:text-red-700"
+    >
+      Delete
+    </button>
+  </>
+)}
 
         {task.description && (
           <p className="mt-2 text-sm leading-relaxed text-slate-500">

@@ -32,6 +32,8 @@ const [taskTitle, setTaskTitle] = useState("");
 const [taskColumnId, setTaskColumnId] = useState("");
 const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
 const [editingTaskTitle, setEditingTaskTitle] = useState("");
+const [editingBoardId, setEditingBoardId] = useState<string | null>(null);
+const [editingBoardName, setEditingBoardName] = useState("");
 
 const handleCreateBoard = async () => {
   const token = localStorage.getItem("token");
@@ -306,6 +308,47 @@ const handleDeleteBoard = async () => {
     console.error("Failed to delete board:", error);
   }
 };
+
+const handleUpdateBoard = async () => {
+  const token = localStorage.getItem("token");
+
+  if (!token || !editingBoardId || !editingBoardName.trim()) return;
+
+  try {
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_API_URL}/boards/${editingBoardId}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: editingBoardName.trim(),
+        }),
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || "Failed to update board");
+    }
+
+setBoards((currentBoards) =>
+  currentBoards.map((board) =>
+    board.id === editingBoardId ? data : board
+  )
+);
+
+    setEditingBoardId(null);
+    setEditingBoardName("");
+  } catch (error) {
+    console.error("Failed to update board:", error);
+  }
+};
+
+
   useEffect(() => {
     const fetchBoards = async () => {
       const token = localStorage.getItem("token");
@@ -446,6 +489,51 @@ useEffect(() => {
             </option>
           ))}
         </select>
+          
+          <button
+        type="button"
+        onClick={() => {
+          setEditingBoardId(selectedBoardId);
+          setEditingBoardName(
+            boards.find((board) => board.id === selectedBoardId)?.name || ""
+          );
+        }}
+        disabled={!selectedBoardId}
+        className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        Edit Board
+      </button>
+
+      {editingBoardId === selectedBoardId && (
+  <div className="flex items-center gap-2">
+    <input
+      type="text"
+      value={editingBoardName}
+      onChange={(event) => setEditingBoardName(event.target.value)}
+      className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-slate-500"
+      autoFocus
+    />
+
+    <button
+      type="button"
+      onClick={handleUpdateBoard}
+      className="text-xs font-medium text-slate-900 hover:text-slate-600"
+    >
+      Save
+    </button>
+
+    <button
+      type="button"
+      onClick={() => {
+        setEditingBoardId(null);
+        setEditingBoardName("");
+      }}
+      className="text-xs font-medium text-slate-500 hover:text-slate-700"
+    >
+      Cancel
+    </button>
+  </div>
+)}
 
           <button
           type="button"

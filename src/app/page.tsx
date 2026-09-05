@@ -273,6 +273,39 @@ const handleUpdateTask = async () => {
     console.error("Failed to update task:", error);
   }
 };
+
+const handleDeleteBoard = async () => {
+  const token = localStorage.getItem("token");
+
+  if (!token || !selectedBoardId) return;
+
+  try {
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_API_URL}/boards/${selectedBoardId}`,
+      {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || "Failed to delete board");
+    }
+
+    const remainingBoards = boards.filter(
+      (board) => board.id !== selectedBoardId
+    );
+
+    setBoards(remainingBoards);
+    setSelectedBoardId(remainingBoards[0]?.id || "");
+  } catch (error) {
+    console.error("Failed to delete board:", error);
+  }
+};
   useEffect(() => {
     const fetchBoards = async () => {
       const token = localStorage.getItem("token");
@@ -321,15 +354,12 @@ const handleUpdateTask = async () => {
         }
       );
 
-      console.log("Selected board:", selectedBoardId);
-      console.log("Columns response status:", response.status);
 
       
 
       if (!response.ok) return;
 
       const data = await response.json();
-console.log("Columns API response:", data);
 
       setColumns(data.columns);
     } catch (error) {
@@ -416,6 +446,16 @@ useEffect(() => {
             </option>
           ))}
         </select>
+
+          <button
+          type="button"
+          onClick={handleDeleteBoard}
+          disabled={!selectedBoardId}
+          className="rounded-lg border border-red-200 px-3 py-2 text-sm font-medium text-red-500 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Delete Board
+        </button>
+
           </div>
           <p className="mt-2  text-sm text-slate-500 font-medium">
             Organize your tasks and workflow efficiently.

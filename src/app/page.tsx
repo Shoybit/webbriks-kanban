@@ -292,15 +292,20 @@ const handleDeleteBoard = async () => {
       }
     );
 
-    const data = await response.json();
+if (!response.ok) {
+  const data = await response.json();
+  throw new Error(data.message || "Failed to delete board");
+}
 
-    if (!response.ok) {
-      throw new Error(data.message || "Failed to delete board");
-    }
+    console.log("Before delete:", boards);
+console.log("Selected board:", selectedBoardId);
 
     const remainingBoards = boards.filter(
       (board) => board.id !== selectedBoardId
     );
+
+    setColumns([]);
+    setTasks([]);
 
     setBoards(remainingBoards);
     setSelectedBoardId(remainingBoards[0]?.id || "");

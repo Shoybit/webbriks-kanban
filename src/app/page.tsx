@@ -1,6 +1,21 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import {
+  DndContext,
+  DragEndEvent,
+  PointerSensor,
+  useDroppable,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+
 export default function Home() {
   const [boards, setBoards] = useState<
     { id: string; name: string }[]
@@ -36,6 +51,106 @@ const [editingBoardId, setEditingBoardId] = useState<string | null>(null);
 const [editingBoardName, setEditingBoardName] = useState("");
 const [showShareForm, setShowShareForm] = useState(false);
 const [shareEmail, setShareEmail] = useState("");
+const sensors = useSensors(useSensor(PointerSensor));
+
+const handleDragEnd = async (event: DragEndEvent) => {
+  const { active, over } = event;
+
+  if (!over) return;
+
+  const token = localStorage.getItem("token");
+
+  if (!token) return;
+
+  const draggedTask = tasks.find((task) => task.id === active.id);
+
+  if (!draggedTask) return;
+
+  const targetTask = tasks.find((task) => task.id === over.id);
+
+  const targetColumnId = targetTask
+    ? targetTask.columnId
+    : columns.find((column) => column.id === over.id)?.id;
+
+  if (!targetColumnId) return;
+
+  const targetTasks = tasks
+    .filter((task) => task.columnId === targetColumnId)
+    .sort((a, b) => a.position - b.position)
+    .filter((task) => task.id !== draggedTask.id);
+
+  let newPosition = targetTasks.length;
+
+  if (targetTask) {
+    const targetIndex = targetTasks.findIndex(
+      (task) => task.id === targetTask.id
+    );
+
+    if (targetIndex !== -1) {
+      newPosition = targetIndex;
+    }
+  }
+
+  try {
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_API_URL}/tasks/${draggedTask.id}/move`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      body: JSON.stringify({
+        columnId: targetColumnId,
+        position: newPosition,
+      }),
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || "Failed to move task");
+    }
+
+setTasks((currentTasks) => {
+  const updatedTasks = [...currentTasks];
+
+  const draggedIndex = updatedTasks.findIndex(
+    (task) => task.id === draggedTask.id
+  );
+
+  if (draggedIndex === -1) return currentTasks;
+
+  const [movedTask] = updatedTasks.splice(draggedIndex, 1);
+
+  movedTask.columnId = targetColumnId;
+
+  const targetIndexes = updatedTasks
+    .map((task, index) =>
+      task.columnId === targetColumnId ? index : -1
+    )
+    .filter((index) => index !== -1);
+
+  const insertIndex =
+    targetIndexes[newPosition] ?? updatedTasks.length;
+
+  updatedTasks.splice(insertIndex, 0, movedTask);
+
+  return updatedTasks.map((task, index) => ({
+    ...task,
+    position:
+      task.columnId === targetColumnId
+        ? updatedTasks
+            .filter((item) => item.columnId === targetColumnId)
+            .findIndex((item) => item.id === task.id)
+        : task.position,
+  }));
+});
+  } catch (error) {
+    console.error("Failed to move task:", error);
+  }
+};
 
 const handleCreateBoard = async () => {
   const token = localStorage.getItem("token");
@@ -58,7 +173,6 @@ const handleCreateBoard = async () => {
     );
 
     const data = await response.json();
-    console.log("Create board response:", data);
     if (!response.ok) {
       throw new Error(data.message || "Failed to create board");
     }
@@ -305,8 +419,6 @@ if (!response.ok) {
   throw new Error(data.message || "Failed to delete board");
 }
 
-    console.log("Before delete:", boards);
-console.log("Selected board:", selectedBoardId);
 
     const remainingBoards = boards.filter(
       (board) => board.id !== selectedBoardId
@@ -493,6 +605,69 @@ useEffect(() => {
 
   fetchTasks();
 }, [columns]);
+
+
+function DraggableTask({
+  task,
+  children,
+}: {
+  task: {
+    id: string;
+    title: string;
+    description: string | null;
+    position: number;
+    columnId: string;
+  };
+  children: React.ReactNode;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+  } = useSortable({
+    id: task.id,
+  });
+
+  const style = {
+    transform: transform
+      ? `translate3d(${transform.x}px, ${transform.y}px, 0)`
+      : undefined,
+    transition,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+    >
+      {children}
+    </div>
+  );
+}
+
+
+
+function DroppableColumn({
+  columnId,
+  children,
+}: {
+  columnId: string;
+  children: React.ReactNode;
+}) {
+  const { setNodeRef } = useDroppable({
+    id: columnId,
+  });
+
+  return (
+    <div ref={setNodeRef}>
+      {children}
+    </div>
+  );
+}
   
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
@@ -861,170 +1036,204 @@ useEffect(() => {
           </div>
         )}
 
-        <div className="grid gap-6 md:grid-cols-3">
-          {columns.map((column) => (
-            <div
-              key={column.id}
-              className="rounded-2xl bg-slate-200/70 p-5 shadow-inner"
-            >
-              <div className="mb-5 flex flex-wrap items-center justify-between gap-2">
-                {editingColumnId === column.id ? (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <input
-                      type="text"
-                      value={editingColumnName}
-                      onChange={(event) => setEditingColumnName(event.target.value)}
-                      className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 outline-none transition-all duration-200 focus:border-slate-400 focus:shadow-lg focus:shadow-slate-200/50"
-                      autoFocus
-                    />
-                    <button
-                      type="button"
-                      onClick={handleUpdateColumn}
-                      className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-medium text-white transition-all duration-200 hover:bg-slate-800"
-                    >
-                      Save
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditingColumnId(null);
-                        setEditingColumnName("");
-                      }}
-                      className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-medium text-slate-500 transition-all duration-200 hover:bg-slate-50"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                ) : (
-                  <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-slate-700">
-                    <span className="h-2 w-2 rounded-full bg-blue-500"></span>
-                    {column.name}
-                  </h3>
-                )}
+<div className="grid gap-6 md:grid-cols-3">
+<DndContext
+  sensors={sensors}
+  onDragEnd={handleDragEnd}
+>
+    {columns.map((column) => (
+      <DroppableColumn
+        key={column.id}
+        columnId={column.id}
+      >
+        <div className="rounded-2xl bg-slate-200/70 p-5 shadow-inner">
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-2">
+            {editingColumnId === column.id ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="text"
+                  value={editingColumnName}
+                  onChange={(event) =>
+                    setEditingColumnName(event.target.value)
+                  }
+                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 outline-none transition-all duration-200 focus:border-slate-400 focus:shadow-lg focus:shadow-slate-200/50"
+                  autoFocus
+                />
 
-                <div className="flex items-center gap-2">
-                  {editingColumnId !== column.id && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditingColumnId(column.id);
-                          setEditingColumnName(column.name);
-                        }}
-                        className="rounded-lg px-2.5 py-1 text-xs font-medium text-slate-500 transition-colors hover:text-slate-700 hover:bg-slate-100"
-                      >
-                        Edit
-                      </button>
-                      
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteColumn(column.id)}
-                        className="rounded-lg px-2.5 py-1 text-xs font-medium text-red-500 transition-colors hover:text-red-700 hover:bg-red-50"
-                      >
-                        Delete
-                      </button>
-                    </>
-                  )}
+                <button
+                  type="button"
+                  onClick={handleUpdateColumn}
+                  className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-medium text-white transition-all duration-200 hover:bg-slate-800"
+                >
+                  Save
+                </button>
 
-                  <span className="rounded-full bg-white/60 px-3 py-1 text-xs font-medium text-slate-500">
-                    {tasks.filter((task) => task.columnId === column.id).length}
-                  </span>
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                {tasks
-                  .filter((task) => task.columnId === column.id)
-                  .sort((a, b) => a.position - b.position)
-                  .map((task) => (
-                    <div
-                      key={task.id}
-                      className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200/50 transition-all duration-200 hover:shadow-md hover:ring-slate-300"
-                    >
-                      {editingTaskId === task.id ? (
-                        <div className="flex flex-wrap items-center gap-2">
-                          <input
-                            type="text"
-                            value={editingTaskTitle}
-                            onChange={(event) => setEditingTaskTitle(event.target.value)}
-                            className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition-all duration-200 focus:border-slate-400 focus:shadow-lg focus:shadow-slate-200/50"
-                            autoFocus
-                          />
-                          <button
-                            type="button"
-                            onClick={handleUpdateTask}
-                            className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-medium text-white transition-all duration-200 hover:bg-slate-800"
-                          >
-                            Save
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditingTaskId(null);
-                              setEditingTaskTitle("");
-                            }}
-                            className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-medium text-slate-500 transition-all duration-200 hover:bg-slate-50"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      ) : (
-                        <>
-                          <h4 className="text-sm font-semibold text-slate-900">
-                            {task.title}
-                          </h4>
-                          <div className="mt-3 flex flex-wrap items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setEditingTaskId(task.id);
-                                setEditingTaskTitle(task.title);
-                              }}
-                              className="rounded-lg px-2.5 py-1 text-xs font-medium text-slate-600 transition-colors hover:text-slate-900 hover:bg-slate-50"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteTask(task.id)}
-                              className="rounded-lg px-2.5 py-1 text-xs font-medium text-red-500 transition-colors hover:text-red-700 hover:bg-red-50"
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </>
-                      )}
-
-                      {task.description && (
-                        <p className="mt-2 text-sm leading-relaxed text-slate-500">
-                          {task.description}
-                        </p>
-                      )}
-                    </div>
-                  ))}
-
-                {tasks.filter((task) => task.columnId === column.id).length === 0 && (
-                  <div className="flex h-30 items-center justify-center rounded-xl border-2 border-dashed border-slate-300/60 bg-white/30 p-8">
-                    <p className="text-sm font-medium text-slate-400">
-                      No tasks yet
-                    </p>
-                  </div>
-                )}
-                
                 <button
                   type="button"
                   onClick={() => {
-                    setTaskColumnId(column.id);
-                    setShowTaskForm(true);
+                    setEditingColumnId(null);
+                    setEditingColumnName("");
                   }}
-                  className="mt-4 w-full rounded-xl border border-dashed border-slate-300 px-4 py-3 text-sm font-medium text-slate-500 transition-all duration-200 hover:border-slate-400 hover:bg-white hover:text-slate-700 hover:shadow-sm"
+                  className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-medium text-slate-500 transition-all duration-200 hover:bg-slate-50"
                 >
-                  + Add Task
+                  Cancel
                 </button>
               </div>
+            ) : (
+              <h3 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-slate-700">
+                <span className="h-2 w-2 rounded-full bg-blue-500"></span>
+                {column.name}
+              </h3>
+            )}
+
+            <div className="flex items-center gap-2">
+              {editingColumnId !== column.id && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingColumnId(column.id);
+                      setEditingColumnName(column.name);
+                    }}
+                    className="rounded-lg px-2.5 py-1 text-xs font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                  >
+                    Edit
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteColumn(column.id)}
+                    className="rounded-lg px-2.5 py-1 text-xs font-medium text-red-500 transition-colors hover:bg-red-50 hover:text-red-700"
+                  >
+                    Delete
+                  </button>
+                </>
+              )}
+
+              <span className="rounded-full bg-white/60 px-3 py-1 text-xs font-medium text-slate-500">
+                {
+                  tasks.filter(
+                    (task) => task.columnId === column.id
+                  ).length
+                }
+              </span>
             </div>
-          ))}
+          </div>
+
+<div className="space-y-3">
+  <SortableContext
+    items={tasks
+      .filter((task) => task.columnId === column.id)
+      .sort((a, b) => a.position - b.position)
+      .map((task) => task.id)}
+    strategy={verticalListSortingStrategy}
+  >
+    {tasks
+      .filter((task) => task.columnId === column.id)
+      .sort((a, b) => a.position - b.position)
+      .map((task) => (
+              <DraggableTask
+                key={task.id}
+                task={task}
+              >
+                <div
+      className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200/50 transition-all duration-200 hover:shadow-md hover:ring-slate-300"
+    >
+                  {editingTaskId === task.id ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input
+                        type="text"
+                        value={editingTaskTitle}
+                        onChange={(event) =>
+                          setEditingTaskTitle(event.target.value)
+                        }
+                        className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition-all duration-200 focus:border-slate-400 focus:shadow-lg focus:shadow-slate-200/50"
+                        autoFocus
+                      />
+
+                      <button
+                        type="button"
+                        onClick={handleUpdateTask}
+                        className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-medium text-white transition-all duration-200 hover:bg-slate-800"
+                      >
+                        Save
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingTaskId(null);
+                          setEditingTaskTitle("");
+                        }}
+                        className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-medium text-slate-500 transition-all duration-200 hover:bg-slate-50"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <h4 className="text-sm font-semibold text-slate-900">
+                        {task.title}
+                      </h4>
+
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingTaskId(task.id);
+                            setEditingTaskTitle(task.title);
+                          }}
+                          className="rounded-lg px-2.5 py-1 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900"
+                        >
+                          Edit
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteTask(task.id)}
+                          className="rounded-lg px-2.5 py-1 text-xs font-medium text-red-500 transition-colors hover:bg-red-50 hover:text-red-700"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </>
+                  )}
+
+                  {task.description && (
+                    <p className="mt-2 text-sm leading-relaxed text-slate-500">
+                      {task.description}
+                    </p>
+                  )}
+                </div>
+                 </DraggableTask>
+              ))}
+                </SortableContext>
+            {tasks.filter(
+              (task) => task.columnId === column.id
+            ).length === 0 && (
+              <div className="flex h-30 items-center justify-center rounded-xl border-2 border-dashed border-slate-300/60 bg-white/30 p-8">
+                <p className="text-sm font-medium text-slate-400">
+                  No tasks yet
+                </p>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={() => {
+                setTaskColumnId(column.id);
+                setShowTaskForm(true);
+              }}
+              className="mt-4 w-full rounded-xl border border-dashed border-slate-300 px-4 py-3 text-sm font-medium text-slate-500 transition-all duration-200 hover:border-slate-400 hover:bg-white hover:text-slate-700 hover:shadow-sm"
+            >
+              + Add Task
+            </button>
+          </div>
         </div>
+      </DroppableColumn>
+    ))}
+  </DndContext>
+</div>
       </section>
     </main>
   );

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import { useRouter } from "next/navigation";
 import {
   DndContext,
   DragEndEvent,
@@ -17,6 +18,16 @@ import {
 } from "@dnd-kit/sortable";
 
 export default function Home() {
+  const router = useRouter();
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      router.replace("/login");
+    }
+  }, [router]);
+
   const [boards, setBoards] = useState<
     { id: string; name: string }[]
   >([]);
@@ -51,6 +62,12 @@ const [editingBoardId, setEditingBoardId] = useState<string | null>(null);
 const [editingBoardName, setEditingBoardName] = useState("");
 const [showShareForm, setShowShareForm] = useState(false);
 const [shareEmail, setShareEmail] = useState("");
+const [userName, setUserName] = useState("");
+const [toast, setToast] = useState<{
+  message: string;
+  type: "success" | "error";
+} | null>(null);
+const [showUserMenu, setShowUserMenu] = useState(false);
 const sensors = useSensors(useSensor(PointerSensor));
 
 const handleDragEnd = async (event: DragEndEvent) => {
@@ -181,8 +198,10 @@ const handleCreateBoard = async () => {
     setSelectedBoardId(data.id);
     setBoardName("");
     setShowBoardForm(false);
+    showToast("Board created successfully", "success");
   } catch (error) {
     console.error("Failed to create board:", error);
+    showToast("Failed to create board", "error");
   }
 };
 
@@ -221,8 +240,10 @@ const handleCreateColumn = async () => {
     setColumns((currentColumns) => [...currentColumns, data.column]);
     setColumnName("");
     setShowColumnForm(false);
+    showToast("Column created successfully", "success");
   } catch (error) {
     console.error("Failed to create column:", error);
+    showToast("Failed to create column", "error");
   }
 };
 
@@ -250,8 +271,10 @@ const handleDeleteColumn = async (columnId: string) => {
     setColumns((currentColumns) =>
       currentColumns.filter((column) => column.id !== columnId)
     );
+    showToast("Column deleted successfully", "success");
   } catch (error) {
     console.error("Failed to delete column:", error);
+    showToast("Failed to delete column", "error");
   }
 };
 
@@ -325,8 +348,10 @@ const handleCreateTask = async () => {
     setTaskTitle("");
     setTaskColumnId("");
     setShowTaskForm(false);
+    showToast("Task created successfully", "success");
   } catch (error) {
     console.error("Failed to create task:", error);
+    showToast("Failed to create task", "error");
   }
 };
 
@@ -429,8 +454,10 @@ if (!response.ok) {
 
     setBoards(remainingBoards);
     setSelectedBoardId(remainingBoards[0]?.id || "");
+    showToast("Board deleted successfully", "success");
   } catch (error) {
     console.error("Failed to delete board:", error);
+    showToast("Failed to delete board", "error");
   }
 };
 
@@ -463,8 +490,10 @@ const handleShareBoard = async () => {
 
     setShareEmail("");
     setShowShareForm(false);
+    showToast("Board shared successfully", "success");
   } catch (error) {
     console.error("Failed to share board:", error);
+    showToast("Failed to share board", "error");
   }
 };
 
@@ -507,6 +536,14 @@ setBoards((currentBoards) =>
   }
 };
 
+useEffect(() => {
+  const user = localStorage.getItem("user");
+
+  if (user) {
+    const parsedUser = JSON.parse(user);
+    setUserName(parsedUser.name || "");
+  }
+}, []);
 
   useEffect(() => {
     const fetchBoards = async () => {
@@ -668,24 +705,51 @@ function DroppableColumn({
     </div>
   );
 }
+
+const showToast = (
+  message: string,
+  type: "success" | "error"
+) => {
+  setToast({ message, type });
+
+  setTimeout(() => {
+    setToast(null);
+  }, 3000);
+};
   
   return (
     <main className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+      {toast && (
+  <div
+    className={`fixed right-5 top-5 z-50 rounded-xl px-5 py-3 text-sm font-medium text-white shadow-lg ${
+      toast.type === "success"
+        ? "bg-emerald-600"
+        : "bg-red-600"
+    }`}
+  >
+    {toast.message}
+  </div>
+)}
       <header className="sticky top-0 z-10 border-b border-slate-200/80 bg-white/80 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-5">
-          <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-slate-900 to-slate-700">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 sm:px-6 py-4 sm:py-5">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-lg bg-gradient-to-br from-slate-900 to-slate-700 shadow-md shadow-slate-900/20">
               <span className="text-sm font-bold text-white">K</span>
             </div>
-            <h1 className="text-xl font-bold tracking-tight text-slate-900">
-              Kanban Board
-            </h1>
+            <div>
+              <h1 className="text-lg sm:text-xl font-bold tracking-tight text-slate-900">
+                Kanban Board
+              </h1>
+              <p className="hidden sm:block text-xs text-slate-400">
+                Manage your workflow
+              </p>
+            </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <button
               onClick={() => setShowBoardForm(true)}
-              className="group rounded-xl bg-gradient-to-r from-slate-900 to-slate-800 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-slate-900/20 transition-all duration-200 hover:shadow-xl hover:shadow-slate-900/30 hover:scale-[1.02] active:scale-[0.98]"
+              className="hidden sm:flex group rounded-xl bg-gradient-to-r from-slate-900 to-slate-800 px-4 sm:px-5 py-2 sm:py-2.5 text-sm font-medium text-white shadow-lg shadow-slate-900/20 transition-all duration-200 hover:shadow-xl hover:shadow-slate-900/30 hover:scale-[1.02] active:scale-[0.98]"
             >
               <span className="flex items-center gap-2">
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -695,26 +759,76 @@ function DroppableColumn({
               </span>
             </button>
 
+            {/* Mobile New Board Button */}
             <button
-              type="button"
-              onClick={handleLogout}
-              className="rounded-xl border border-red-200 px-4 py-2.5 text-sm font-medium text-red-500 transition-all duration-200 hover:bg-red-50 hover:border-red-300 active:scale-[0.98]"
+              onClick={() => setShowBoardForm(true)}
+              className="sm:hidden rounded-xl bg-gradient-to-r from-slate-900 to-slate-800 p-2.5 text-white shadow-lg shadow-slate-900/20 transition-all duration-200 hover:scale-[1.05] active:scale-[0.95]"
             >
-              Logout
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
             </button>
+
+            {/* User Profile Dropdown */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowUserMenu(!showUserMenu)}
+                className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white/50 px-3 py-2 transition-all duration-200 hover:bg-white hover:border-slate-300 hover:shadow-md"
+              >
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-slate-700 to-slate-900 text-xs font-bold text-white">
+                  {userName.charAt(0).toUpperCase() || "U"}
+                </div>
+                <span className="hidden sm:block text-sm font-medium text-slate-700 max-w-[100px] truncate">
+                  {userName || "User"}
+                </span>
+                <svg className={`h-4 w-4 text-slate-400 transition-transform duration-200 ${showUserMenu ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                </svg>
+              </button>
+
+              {/* Dropdown Menu */}
+              {showUserMenu && (
+                <div className="absolute right-0 mt-2 w-56 origin-top-right animate-in fade-in slide-in-from-top-2 duration-200 rounded-xl bg-white/90 p-2 shadow-xl ring-1 ring-slate-200/80 backdrop-blur-sm">
+                  <div className="border-b border-slate-200/80 px-3 py-2">
+                    <p className="text-sm font-medium text-slate-900">
+                      {userName || "User"}
+                    </p>
+                    <p className="text-xs text-slate-500 truncate">
+                      {localStorage.getItem("user") ? JSON.parse(localStorage.getItem("user") || "{}").email : "user@example.com"}
+                    </p>
+                  </div>
+                  
+
+
+                  <div className="border-t border-slate-200/80 mt-1 pt-1">
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-red-600 transition-colors hover:bg-red-50"
+                    >
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
+                      </svg>
+                      Logout
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </header>
 
-      <section className="mx-auto max-w-7xl px-6 py-10">
-        <div className="mb-8">
-          <div className="flex flex-wrap items-center gap-3">
+      <section className="mx-auto max-w-7xl px-4 sm:px-6 py-6 sm:py-10">
+        <div className="mb-6 sm:mb-8">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             {/* Board Select */}
-            <div className="relative">
+            <div className="relative flex-1 sm:flex-none min-w-[150px] sm:min-w-[200px]">
               <select
                 value={selectedBoardId}
                 onChange={(event) => setSelectedBoardId(event.target.value)}
-                className="appearance-none rounded-xl border border-slate-200 bg-white px-4 py-2.5 pr-10 text-sm font-medium text-slate-900 outline-none transition-all duration-200 focus:border-slate-400 focus:shadow-lg focus:shadow-slate-200/50 hover:border-slate-300 cursor-pointer"
+                className="w-full appearance-none rounded-xl border border-slate-200 bg-white px-3 sm:px-4 py-2 sm:py-2.5 pr-8 sm:pr-10 text-sm font-medium text-slate-900 outline-none transition-all duration-200 focus:border-slate-400 focus:shadow-lg focus:shadow-slate-200/50 hover:border-slate-300 cursor-pointer"
                 style={{
                   backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23475569' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19.5 8.25l-7.5 7.5-7.5-7.5'/%3E%3C/svg%3E")`,
                   backgroundPosition: 'right 0.75rem center',
@@ -739,24 +853,27 @@ function DroppableColumn({
                 );
               }}
               disabled={!selectedBoardId}
-              className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 transition-all duration-200 hover:bg-slate-50 hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50 active:scale-[0.98]"
+              className="rounded-xl border border-slate-200 px-3 sm:px-4 py-2 sm:py-2.5 text-sm font-medium text-slate-600 transition-all duration-200 hover:bg-slate-50 hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50 active:scale-[0.98]"
             >
-              Edit Board
+              <span className="hidden sm:inline">Edit Board</span>
+              <svg className="sm:hidden h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+              </svg>
             </button>
 
             {editingBoardId === selectedBoardId && (
-              <div className="flex items-center gap-2">
+              <div className="flex w-full sm:w-auto items-center gap-2">
                 <input
                   type="text"
                   value={editingBoardName}
                   onChange={(event) => setEditingBoardName(event.target.value)}
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition-all duration-200 focus:border-slate-400 focus:shadow-lg focus:shadow-slate-200/50"
+                  className="flex-1 sm:flex-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition-all duration-200 focus:border-slate-400 focus:shadow-lg focus:shadow-slate-200/50"
                   autoFocus
                 />
                 <button
                   type="button"
                   onClick={handleUpdateBoard}
-                  className="rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-medium text-white transition-all duration-200 hover:bg-slate-800 active:scale-[0.98]"
+                  className="rounded-xl bg-slate-900 px-3 sm:px-4 py-2 text-xs font-medium text-white transition-all duration-200 hover:bg-slate-800 active:scale-[0.98]"
                 >
                   Save
                 </button>
@@ -766,7 +883,7 @@ function DroppableColumn({
                     setEditingBoardId(null);
                     setEditingBoardName("");
                   }}
-                  className="rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-medium text-slate-500 transition-all duration-200 hover:bg-slate-50"
+                  className="rounded-xl border border-slate-200 px-3 sm:px-4 py-2 text-xs font-medium text-slate-500 transition-all duration-200 hover:bg-slate-50"
                 >
                   Cancel
                 </button>
@@ -777,34 +894,40 @@ function DroppableColumn({
               type="button"
               onClick={handleDeleteBoard}
               disabled={!selectedBoardId}
-              className="rounded-xl border border-red-200 px-4 py-2.5 text-sm font-medium text-red-500 transition-all duration-200 hover:bg-red-50 hover:border-red-300 disabled:cursor-not-allowed disabled:opacity-50 active:scale-[0.98]"
+              className="rounded-xl border border-red-200 px-3 sm:px-4 py-2 sm:py-2.5 text-sm font-medium text-red-500 transition-all duration-200 hover:bg-red-50 hover:border-red-300 disabled:cursor-not-allowed disabled:opacity-50 active:scale-[0.98]"
             >
-              Delete Board
+              <span className="hidden sm:inline">Delete Board</span>
+              <svg className="sm:hidden h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+              </svg>
             </button>
 
             <button
               type="button"
               onClick={() => setShowShareForm(true)}
               disabled={!selectedBoardId}
-              className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600 transition-all duration-200 hover:bg-slate-50 hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50 active:scale-[0.98]"
+              className="rounded-xl border border-slate-200 px-3 sm:px-4 py-2 sm:py-2.5 text-sm font-medium text-slate-600 transition-all duration-200 hover:bg-slate-50 hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50 active:scale-[0.98]"
             >
-              Share Board
+              <span className="hidden sm:inline">Share Board</span>
+              <svg className="sm:hidden h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z" />
+              </svg>
             </button>
 
             {showShareForm && (
-              <div className="mt-3 flex w-full flex-wrap items-center gap-2 sm:mt-0 sm:w-auto">
+              <div className="mt-2 flex w-full flex-wrap items-center gap-2 sm:mt-0 sm:w-auto">
                 <input
                   type="email"
                   value={shareEmail}
                   onChange={(event) => setShareEmail(event.target.value)}
                   placeholder="Enter user email..."
-                  className="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition-all duration-200 focus:border-slate-400 focus:shadow-lg focus:shadow-slate-200/50 sm:min-w-[200px]"
+                  className="flex-1 rounded-xl border border-slate-200 bg-white px-3 sm:px-4 py-2 sm:py-2.5 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition-all duration-200 focus:border-slate-400 focus:shadow-lg focus:shadow-slate-200/50 sm:min-w-[200px]"
                   autoFocus
                 />
                 <button
                   type="button"
                   onClick={handleShareBoard}
-                  className="rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-medium text-white transition-all duration-200 hover:bg-slate-800 active:scale-[0.98]"
+                  className="rounded-xl bg-slate-900 px-4 sm:px-5 py-2 sm:py-2.5 text-sm font-medium text-white transition-all duration-200 hover:bg-slate-800 active:scale-[0.98]"
                 >
                   Share
                 </button>
@@ -814,7 +937,7 @@ function DroppableColumn({
                     setShowShareForm(false);
                     setShareEmail("");
                   }}
-                  className="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-medium text-slate-500 transition-all duration-200 hover:bg-slate-50"
+                  className="rounded-xl border border-slate-200 px-4 sm:px-5 py-2 sm:py-2.5 text-sm font-medium text-slate-500 transition-all duration-200 hover:bg-slate-50"
                 >
                   Cancel
                 </button>
@@ -827,14 +950,14 @@ function DroppableColumn({
         </div>
 
         {showBoardForm && (
-          <div className="mb-8 animate-in fade-in slide-in-from-top-2 duration-300 rounded-2xl bg-white/80 p-6 shadow-lg ring-1 ring-slate-200/80 backdrop-blur-sm">
-            <div className="mb-5 flex items-center gap-3">
+          <div className="mb-6 sm:mb-8 animate-in fade-in slide-in-from-top-2 duration-300 rounded-2xl bg-white/80 p-4 sm:p-6 shadow-lg ring-1 ring-slate-200/80 backdrop-blur-sm">
+            <div className="mb-4 sm:mb-5 flex items-center gap-3">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-slate-900 to-slate-700">
                 <svg className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                 </svg>
               </div>
-              <h3 className="text-lg font-semibold text-slate-900">
+              <h3 className="text-base sm:text-lg font-semibold text-slate-900">
                 Create New Board
               </h3>
             </div>
@@ -851,9 +974,10 @@ function DroppableColumn({
                   value={boardName}
                   onChange={(event) => setBoardName(event.target.value)}
                   placeholder="Enter board name..."
-                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 pl-10 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition-all duration-200 focus:border-slate-400 focus:bg-white focus:shadow-lg focus:shadow-slate-200/50 hover:border-slate-300"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 sm:py-3 pl-10 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition-all duration-200 focus:border-slate-400 focus:bg-white focus:shadow-lg focus:shadow-slate-200/50 hover:border-slate-300"
                   onKeyDown={(event) => {
                     if (event.key === 'Enter' && boardName.trim()) {
+                      handleCreateBoard();
                       event.preventDefault();
                     }
                   }}
@@ -865,7 +989,7 @@ function DroppableColumn({
                   type="button"
                   onClick={handleCreateBoard}
                   disabled={!boardName.trim()}
-                  className="group relative overflow-hidden rounded-xl bg-gradient-to-r from-slate-900 to-slate-800 px-6 py-3 text-sm font-medium text-white shadow-lg shadow-slate-900/30 transition-all duration-200 hover:shadow-xl hover:shadow-slate-900/40 hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
+                  className="group relative overflow-hidden rounded-xl bg-gradient-to-r from-slate-900 to-slate-800 px-5 sm:px-6 py-2.5 sm:py-3 text-sm font-medium text-white shadow-lg shadow-slate-900/30 transition-all duration-200 hover:shadow-xl hover:shadow-slate-900/40 hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
                 >
                   <span className="relative z-10 flex items-center gap-2">
                     Create
@@ -882,7 +1006,7 @@ function DroppableColumn({
                     setShowBoardForm(false);
                     setBoardName("");
                   }}
-                  className="rounded-xl border border-slate-200 bg-white/50 px-5 py-3 text-sm font-medium text-slate-600 transition-all duration-200 hover:bg-slate-50 hover:border-slate-300 hover:shadow-sm active:scale-[0.98]"
+                  className="rounded-xl border border-slate-200 bg-white/50 px-4 sm:px-5 py-2.5 sm:py-3 text-sm font-medium text-slate-600 transition-all duration-200 hover:bg-slate-50 hover:border-slate-300 hover:shadow-sm active:scale-[0.98]"
                 >
                   Cancel
                 </button>
@@ -891,23 +1015,29 @@ function DroppableColumn({
           </div>
         )}
 
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold text-slate-900">
+        <div className="mb-4 sm:mb-6 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-base sm:text-lg font-semibold text-slate-900 flex items-center gap-2">
+            <svg className="h-5 w-5 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+            </svg>
             Workflow
           </h2>
 
           <button
             type="button"
             onClick={() => setShowColumnForm(true)}
-            className="rounded-xl bg-gradient-to-r from-slate-900 to-slate-800 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-slate-900/20 transition-all duration-200 hover:shadow-xl hover:shadow-slate-900/30 hover:scale-[1.02] active:scale-[0.98]"
+            className="rounded-xl bg-gradient-to-r from-slate-900 to-slate-800 px-4 sm:px-5 py-2 sm:py-2.5 text-sm font-medium text-white shadow-lg shadow-slate-900/20 transition-all duration-200 hover:shadow-xl hover:shadow-slate-900/30 hover:scale-[1.02] active:scale-[0.98] flex items-center gap-2"
           >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
             Add Column
           </button>
         </div>   
 
         {showColumnForm && (
-          <div className="mb-6 animate-in fade-in slide-in-from-top-2 duration-300 rounded-2xl bg-white/80 p-5 shadow-lg ring-1 ring-slate-200/80 backdrop-blur-sm">
-            <div className="mb-4 flex items-center gap-3">
+          <div className="mb-6 animate-in fade-in slide-in-from-top-2 duration-300 rounded-2xl bg-white/80 p-4 sm:p-5 shadow-lg ring-1 ring-slate-200/80 backdrop-blur-sm">
+            <div className="mb-3 sm:mb-4 flex items-center gap-3">
               <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-slate-900 to-slate-700">
                 <svg className="h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -933,6 +1063,7 @@ function DroppableColumn({
                   className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 pl-10 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition-all duration-200 focus:border-slate-400 focus:bg-white focus:shadow-lg focus:shadow-slate-200/50 hover:border-slate-300"
                   onKeyDown={(event) => {
                     if (event.key === 'Enter' && columnName.trim()) {
+                      handleCreateColumn();
                       event.preventDefault();
                     }
                   }}
@@ -944,7 +1075,7 @@ function DroppableColumn({
                   type="button"
                   onClick={handleCreateColumn}
                   disabled={!columnName.trim()}
-                  className="group relative overflow-hidden rounded-xl bg-gradient-to-r from-slate-900 to-slate-800 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-slate-900/30 transition-all duration-200 hover:shadow-xl hover:shadow-slate-900/40 hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
+                  className="group relative overflow-hidden rounded-xl bg-gradient-to-r from-slate-900 to-slate-800 px-4 sm:px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-slate-900/30 transition-all duration-200 hover:shadow-xl hover:shadow-slate-900/40 hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
                 >
                   <span className="relative z-10 flex items-center gap-1.5">
                     Create
@@ -961,7 +1092,7 @@ function DroppableColumn({
                     setShowColumnForm(false);
                     setColumnName("");
                   }}
-                  className="rounded-xl border border-slate-200 bg-white/50 px-4 py-2.5 text-sm font-medium text-slate-600 transition-all duration-200 hover:bg-slate-50 hover:border-slate-300 hover:shadow-sm active:scale-[0.98]"
+                  className="rounded-xl border border-slate-200 bg-white/50 px-3 sm:px-4 py-2.5 text-sm font-medium text-slate-600 transition-all duration-200 hover:bg-slate-50 hover:border-slate-300 hover:shadow-sm active:scale-[0.98]"
                 >
                   Cancel
                 </button>
@@ -971,8 +1102,8 @@ function DroppableColumn({
         )}
     
         {showTaskForm && (
-          <div className="mb-6 animate-in fade-in slide-in-from-top-2 duration-300 rounded-2xl bg-white/80 p-5 shadow-lg ring-1 ring-slate-200/80 backdrop-blur-sm">
-            <div className="mb-4 flex items-center gap-3">
+          <div className="mb-6 animate-in fade-in slide-in-from-top-2 duration-300 rounded-2xl bg-white/80 p-4 sm:p-5 shadow-lg ring-1 ring-slate-200/80 backdrop-blur-sm">
+            <div className="mb-3 sm:mb-4 flex items-center gap-3">
               <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-slate-900 to-slate-700">
                 <svg className="h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -995,9 +1126,10 @@ function DroppableColumn({
                   value={taskTitle}
                   onChange={(event) => setTaskTitle(event.target.value)}
                   placeholder="Enter task title..."
-                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 pl-10 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition-all duration-200 focus:border-slate-400 focus:bg-white focus:shadow-lg focus:shadow-slate-200/50 hover:border-slate-300"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 sm:py-3 pl-10 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition-all duration-200 focus:border-slate-400 focus:bg-white focus:shadow-lg focus:shadow-slate-200/50 hover:border-slate-300"
                   onKeyDown={(event) => {
                     if (event.key === 'Enter' && taskTitle.trim()) {
+                      handleCreateTask();
                       event.preventDefault();
                     }
                   }}
@@ -1009,7 +1141,7 @@ function DroppableColumn({
                   type="button"
                   onClick={handleCreateTask}
                   disabled={!taskTitle.trim()}
-                  className="group relative overflow-hidden rounded-xl bg-gradient-to-r from-slate-900 to-slate-800 px-5 py-3 text-sm font-medium text-white shadow-lg shadow-slate-900/30 transition-all duration-200 hover:shadow-xl hover:shadow-slate-900/40 hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
+                  className="group relative overflow-hidden rounded-xl bg-gradient-to-r from-slate-900 to-slate-800 px-4 sm:px-5 py-2.5 sm:py-3 text-sm font-medium text-white shadow-lg shadow-slate-900/30 transition-all duration-200 hover:shadow-xl hover:shadow-slate-900/40 hover:scale-[1.02] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
                 >
                   <span className="relative z-10 flex items-center gap-1.5">
                     Create
@@ -1027,7 +1159,7 @@ function DroppableColumn({
                     setTaskTitle("");
                     setTaskColumnId("");
                   }}
-                  className="rounded-xl border border-slate-200 bg-white/50 px-4 py-3 text-sm font-medium text-slate-600 transition-all duration-200 hover:bg-slate-50 hover:border-slate-300 hover:shadow-sm active:scale-[0.98]"
+                  className="rounded-xl border border-slate-200 bg-white/50 px-3 sm:px-4 py-2.5 sm:py-3 text-sm font-medium text-slate-600 transition-all duration-200 hover:bg-slate-50 hover:border-slate-300 hover:shadow-sm active:scale-[0.98]"
                 >
                   Cancel
                 </button>
@@ -1036,7 +1168,7 @@ function DroppableColumn({
           </div>
         )}
 
-<div className="grid gap-6 md:grid-cols-3">
+<div className="grid gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3">
 <DndContext
   sensors={sensors}
   onDragEnd={handleDragEnd}
@@ -1046,24 +1178,24 @@ function DroppableColumn({
         key={column.id}
         columnId={column.id}
       >
-        <div className="rounded-2xl bg-slate-200/70 p-5 shadow-inner">
-          <div className="mb-5 flex flex-wrap items-center justify-between gap-2">
+        <div className="rounded-2xl bg-slate-200/70 p-4 sm:p-5 shadow-inner">
+          <div className="mb-4 sm:mb-5 flex flex-wrap items-center justify-between gap-2">
             {editingColumnId === column.id ? (
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex w-full sm:w-auto flex-wrap items-center gap-2">
                 <input
                   type="text"
                   value={editingColumnName}
                   onChange={(event) =>
                     setEditingColumnName(event.target.value)
                   }
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 outline-none transition-all duration-200 focus:border-slate-400 focus:shadow-lg focus:shadow-slate-200/50"
+                  className="flex-1 sm:flex-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 outline-none transition-all duration-200 focus:border-slate-400 focus:shadow-lg focus:shadow-slate-200/50"
                   autoFocus
                 />
 
                 <button
                   type="button"
                   onClick={handleUpdateColumn}
-                  className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-medium text-white transition-all duration-200 hover:bg-slate-800"
+                  className="rounded-xl bg-slate-900 px-3 sm:px-4 py-2 text-xs font-medium text-white transition-all duration-200 hover:bg-slate-800"
                 >
                   Save
                 </button>
@@ -1086,7 +1218,7 @@ function DroppableColumn({
               </h3>
             )}
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 sm:gap-2">
               {editingColumnId !== column.id && (
                 <>
                   <button
@@ -1095,7 +1227,7 @@ function DroppableColumn({
                       setEditingColumnId(column.id);
                       setEditingColumnName(column.name);
                     }}
-                    className="rounded-lg px-2.5 py-1 text-xs font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                    className="rounded-lg px-2 py-1 text-xs font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
                   >
                     Edit
                   </button>
@@ -1103,14 +1235,14 @@ function DroppableColumn({
                   <button
                     type="button"
                     onClick={() => handleDeleteColumn(column.id)}
-                    className="rounded-lg px-2.5 py-1 text-xs font-medium text-red-500 transition-colors hover:bg-red-50 hover:text-red-700"
+                    className="rounded-lg px-2 py-1 text-xs font-medium text-red-500 transition-colors hover:bg-red-50 hover:text-red-700"
                   >
                     Delete
                   </button>
                 </>
               )}
 
-              <span className="rounded-full bg-white/60 px-3 py-1 text-xs font-medium text-slate-500">
+              <span className="rounded-full bg-white/60 px-2.5 sm:px-3 py-1 text-xs font-medium text-slate-500">
                 {
                   tasks.filter(
                     (task) => task.columnId === column.id
@@ -1137,64 +1269,69 @@ function DroppableColumn({
                 task={task}
               >
                 <div
-      className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200/50 transition-all duration-200 hover:shadow-md hover:ring-slate-300"
+      className="rounded-xl bg-white p-4 sm:p-5 shadow-sm ring-1 ring-slate-200/50 transition-all duration-200 hover:shadow-md hover:ring-slate-300 cursor-grab active:cursor-grabbing"
     >
                   {editingTaskId === task.id ? (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <input
-                        type="text"
-                        value={editingTaskTitle}
-                        onChange={(event) =>
-                          setEditingTaskTitle(event.target.value)
-                        }
-                        className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition-all duration-200 focus:border-slate-400 focus:shadow-lg focus:shadow-slate-200/50"
-                        autoFocus
-                      />
+<div className="flex flex-wrap items-center gap-2">
+  <input
+    type="text"
+    value={editingTaskTitle}
+    onChange={(event) =>
+      setEditingTaskTitle(event.target.value)
+    }
+    className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition-all duration-200 focus:border-slate-400 focus:shadow-lg focus:shadow-slate-200/50"
+    autoFocus
+  />
 
-                      <button
-                        type="button"
-                        onClick={handleUpdateTask}
-                        className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-medium text-white transition-all duration-200 hover:bg-slate-800"
-                      >
-                        Save
-                      </button>
+  <button
+    type="button"
+    onPointerDown={(event) => event.stopPropagation()}
+    onClick={handleUpdateTask}
+    className="rounded-xl bg-slate-900 px-3 sm:px-4 py-2 text-xs font-medium text-white transition-all duration-200 hover:bg-slate-800"
+  >
+    Save
+  </button>
 
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditingTaskId(null);
-                          setEditingTaskTitle("");
-                        }}
-                        className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-medium text-slate-500 transition-all duration-200 hover:bg-slate-50"
-                      >
-                        Cancel
-                      </button>
-                    </div>
+  <button
+    type="button"
+    onPointerDown={(event) => event.stopPropagation()}
+    onClick={() => {
+      setEditingTaskId(null);
+      setEditingTaskTitle("");
+    }}
+    className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-medium text-slate-500 transition-all duration-200 hover:bg-slate-50"
+  >
+    Cancel
+  </button>
+</div>
                   ) : (
                     <>
-                      <h4 className="text-sm font-semibold text-slate-900">
-                        {task.title}
-                      </h4>
+                      <div className="flex items-start justify-between gap-2">
+                        <h4 className="text-sm font-semibold text-slate-900 flex-1">
+                          {task.title}
+                        </h4>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onClick={() => {
+                              setEditingTaskId(task.id);
+                              setEditingTaskTitle(task.title);
+                            }}
+                            className="rounded-lg px-2 py-1 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900"
+                          >
+                            Edit
+                          </button>
 
-                      <div className="mt-3 flex flex-wrap items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingTaskId(task.id);
-                            setEditingTaskTitle(task.title);
-                          }}
-                          className="rounded-lg px-2.5 py-1 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900"
-                        >
-                          Edit
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteTask(task.id)}
-                          className="rounded-lg px-2.5 py-1 text-xs font-medium text-red-500 transition-colors hover:bg-red-50 hover:text-red-700"
-                        >
-                          Delete
-                        </button>
+                    <button
+                      type="button"
+                      onPointerDown={(event) => event.stopPropagation()}
+                      onClick={() => handleDeleteTask(task.id)}
+                            className="rounded-lg px-2 py-1 text-xs font-medium text-red-500 transition-colors hover:bg-red-50 hover:text-red-700"
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </div>
                     </>
                   )}
@@ -1211,7 +1348,7 @@ function DroppableColumn({
             {tasks.filter(
               (task) => task.columnId === column.id
             ).length === 0 && (
-              <div className="flex h-30 items-center justify-center rounded-xl border-2 border-dashed border-slate-300/60 bg-white/30 p-8">
+              <div className="flex h-24 sm:h-30 items-center justify-center rounded-xl border-2 border-dashed border-slate-300/60 bg-white/30 p-6 sm:p-8">
                 <p className="text-sm font-medium text-slate-400">
                   No tasks yet
                 </p>
@@ -1224,7 +1361,7 @@ function DroppableColumn({
                 setTaskColumnId(column.id);
                 setShowTaskForm(true);
               }}
-              className="mt-4 w-full rounded-xl border border-dashed border-slate-300 px-4 py-3 text-sm font-medium text-slate-500 transition-all duration-200 hover:border-slate-400 hover:bg-white hover:text-slate-700 hover:shadow-sm"
+              className="mt-3 sm:mt-4 w-full rounded-xl border border-dashed border-slate-300 px-3 sm:px-4 py-2.5 sm:py-3 text-sm font-medium text-slate-500 transition-all duration-200 hover:border-slate-400 hover:bg-white hover:text-slate-700 hover:shadow-sm"
             >
               + Add Task
             </button>
